@@ -94,9 +94,9 @@ export default function VideoCompressor() {
 
       // 读取输出文件
       const data = await ffmpeg.readFile(outputName);
-      // 将 FileData 转换为 Uint8Array
-      const uint8Array = data instanceof Uint8Array ? data : new Uint8Array(data as unknown as ArrayBuffer);
-      const blob = new Blob([uint8Array], { type: `video/${outputFormat}` });
+      // 将 FileData 转换为标准 Uint8Array（避免 SharedArrayBuffer 类型问题）
+      const uint8Array = data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data as unknown as ArrayBuffer);
+      const blob = new Blob([uint8Array.buffer], { type: `video/${outputFormat}` });
       const url = URL.createObjectURL(blob);
 
       setCompressed(url);
