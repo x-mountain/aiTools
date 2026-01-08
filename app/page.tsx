@@ -8,6 +8,12 @@ export default function Home() {
       href: "/md5-modifier",
       icon: "🔐",
     },
+    {
+      name: "视频在线压缩",
+      description: "在浏览器中压缩视频，支持调整分辨率和质量",
+      href: "/video-compressor",
+      icon: "🎬",
+    },
   ];
 
   return (
