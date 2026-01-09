@@ -23,31 +23,97 @@ function generateCards(): number[] {
   return cards;
 }
 
-// 24点求解算法
+// 分数类，用于精确计算
+class Fraction {
+  numerator: number;   // 分子
+  denominator: number; // 分母
+
+  constructor(numerator: number, denominator: number = 1) {
+    if (denominator === 0) {
+      throw new Error('分母不能为0');
+    }
+    // 约分
+    const gcd = this.gcd(Math.abs(numerator), Math.abs(denominator));
+    this.numerator = numerator / gcd;
+    this.denominator = denominator / gcd;
+    // 确保分母为正
+    if (this.denominator < 0) {
+      this.numerator = -this.numerator;
+      this.denominator = -this.denominator;
+    }
+  }
+
+  // 最大公约数
+  private gcd(a: number, b: number): number {
+    return b === 0 ? a : this.gcd(b, a % b);
+  }
+
+  // 加法
+  add(other: Fraction): Fraction {
+    return new Fraction(
+      this.numerator * other.denominator + other.numerator * this.denominator,
+      this.denominator * other.denominator
+    );
+  }
+
+  // 减法
+  subtract(other: Fraction): Fraction {
+    return new Fraction(
+      this.numerator * other.denominator - other.numerator * this.denominator,
+      this.denominator * other.denominator
+    );
+  }
+
+  // 乘法
+  multiply(other: Fraction): Fraction {
+    return new Fraction(
+      this.numerator * other.numerator,
+      this.denominator * other.denominator
+    );
+  }
+
+  // 除法
+  divide(other: Fraction): Fraction {
+    if (other.numerator === 0) {
+      throw new Error('不能除以0');
+    }
+    return new Fraction(
+      this.numerator * other.denominator,
+      this.denominator * other.numerator
+    );
+  }
+
+  // 判断是否等于24
+  equals24(): boolean {
+    return this.numerator === 24 && this.denominator === 1;
+  }
+
+  // 转换为数值
+  toNumber(): number {
+    return this.numerator / this.denominator;
+  }
+}
+
+// 24点求解算法（使用分数精确计算）
 function solve24(cards: number[]): string[] {
   const solutions: Set<string> = new Set();
   const target = 24;
-  const eps = 0.0001;
-
-  // 生成所有排列
-  function permute(arr: number[]): number[][] {
-    if (arr.length <= 1) return [arr];
-    const result: number[][] = [];
-    for (let i = 0; i < arr.length; i++) {
-      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
-      const perms = permute(rest);
-      for (const perm of perms) {
-        result.push([arr[i], ...perm]);
-      }
-    }
-    return result;
-  }
 
   // 递归计算所有可能的表达式
-  function calculate(nums: number[], exprs: string[]): void {
+  function calculate(nums: Fraction[], exprs: string[]): void {
     if (nums.length === 1) {
-      if (Math.abs(nums[0] - target) < eps) {
-        solutions.add(exprs[0]);
+      if (nums[0].equals24()) {
+        // 验证表达式不包含小数
+        const expr = exprs[0];
+        try {
+          const result = Function(`"use strict"; return (${expr})`)();
+          // 必须精确等于24（不使用误差范围）
+          if (result === 24) {
+            solutions.add(expr);
+          }
+        } catch (e) {
+          // 忽略计算错误的表达式
+        }
       }
       return;
     }
@@ -65,29 +131,68 @@ function solve24(cards: number[]): string[] {
         const remainingExprs = exprs.filter((_, idx) => idx !== i && idx !== j);
 
         // 加法
-        calculate([...remaining, a + b], [...remainingExprs, `(${exprA}+${exprB})`]);
+        try {
+          calculate([...remaining, a.add(b)], [...remainingExprs, `(${exprA}+${exprB})`]);
+        } catch (e) { /* 忽略错误 */ }
 
         // 减法
-        calculate([...remaining, a - b], [...remainingExprs, `(${exprA}-${exprB})`]);
+        try {
+          calculate([...remaining, a.subtract(b)], [...remainingExprs, `(${exprA}-${exprB})`]);
+        } catch (e) { /* 忽略错误 */ }
 
         // 乘法
-        calculate([...remaining, a * b], [...remainingExprs, `(${exprA}*${exprB})`]);
+        try {
+          calculate([...remaining, a.multiply(b)], [...remainingExprs, `(${exprA}*${exprB})`]);
+        } catch (e) { /* 忽略错误 */ }
 
         // 除法
-        if (Math.abs(b) > eps) {
-          calculate([...remaining, a / b], [...remainingExprs, `(${exprA}/${exprB})`]);
-        }
+        try {
+          if (b.numerator !== 0) {
+            const result = a.divide(b);
+            // 只保留结果为整数的除法表达式
+            if (result.denominator === 1 || nums.length > 1) {
+              calculate([...remaining, result], [...remainingExprs, `(${exprA}/${exprB})`]);
+            }
+          }
+        } catch (e) { /* 忽略除以0的错误 */ }
       }
     }
+  }
+
+  // 生成所有排列
+  function permute(arr: number[]): number[][] {
+    if (arr.length <= 1) return [arr];
+    const result: number[][] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+      const perms = permute(rest);
+      for (const perm of perms) {
+        result.push([arr[i], ...perm]);
+      }
+    }
+    return result;
   }
 
   // 尝试所有排列
   const perms = permute(cards);
   for (const perm of perms) {
-    calculate(perm, perm.map(String));
+    const fractions = perm.map(n => new Fraction(n));
+    const expressions = perm.map(String);
+    calculate(fractions, expressions);
   }
 
-  return Array.from(solutions).slice(0, 5); // 返回前5个解
+  // 过滤掉包含小数的解
+  const validSolutions = Array.from(solutions).filter(expr => {
+    try {
+      const result = Function(`"use strict"; return (${expr})`)();
+      // 精确等于24，不允许有任何误差
+      return result === 24 && !expr.includes('.');
+    } catch (e) {
+      return false;
+    }
+  });
+
+  return validSolutions.slice(0, 5); // 返回前5个解
 }
 
 // 简化表达式显示（移除不必要的括号）
