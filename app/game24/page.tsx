@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { AUTO_REFRESH_INTERVAL } from './config';
 
 interface Room {
   id: string;
@@ -31,6 +32,7 @@ export default function Game24Page() {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     // 从 localStorage 获取当前用户
@@ -45,10 +47,10 @@ export default function Game24Page() {
     }
   }, []);
 
-  // 定时刷新房间列表
+  // 定时刷新房间列表（仅当配置的刷新间隔 > 0 时启用）
   useEffect(() => {
-    if (currentUser && !showCreateRoom) {
-      const interval = setInterval(loadRooms, 2000); // 从3秒改为2秒，更及时地更新房间列表
+    if (currentUser && !showCreateRoom && AUTO_REFRESH_INTERVAL > 0) {
+      const interval = setInterval(loadRooms, AUTO_REFRESH_INTERVAL);
       return () => clearInterval(interval);
     }
   }, [currentUser, showCreateRoom]);
@@ -64,6 +66,8 @@ export default function Game24Page() {
       }
     } catch (err) {
       console.error('加载房间失败:', err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -77,6 +81,12 @@ export default function Game24Page() {
     } catch (err) {
       console.error('加载排行榜失败:', err);
     }
+  };
+
+  // 手动刷新
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadRooms(), loadLeaderboard()]);
   };
 
   const handleRegister = async () => {
@@ -241,9 +251,23 @@ export default function Game24Page() {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white truncate">🎮 24点游戏大厅</h1>
               <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 truncate">
                 当前玩家: <span className="font-semibold text-purple-600 dark:text-purple-400">{currentUser}</span>
+                {AUTO_REFRESH_INTERVAL === 0 && (
+                  <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                    手动刷新模式
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex gap-2 md:gap-3 flex-shrink-0">
+              {AUTO_REFRESH_INTERVAL === 0 && (
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={refreshing}
+                  className="px-3 md:px-4 py-2 text-sm md:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {refreshing ? '🔄 刷新中...' : '🔄 刷新'}
+                </button>
+              )}
               <Link 
                 href="/"
                 className="px-3 md:px-4 py-2 text-sm md:text-base text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors whitespace-nowrap"

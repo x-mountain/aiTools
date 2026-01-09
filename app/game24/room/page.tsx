@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { AUTO_REFRESH_INTERVAL } from '../config';
 
 interface RoomData {
   id: string;
@@ -41,6 +42,7 @@ function RoomContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem('game24_user');
@@ -79,13 +81,13 @@ function RoomContent() {
     };
   }, [roomId]);
 
-  // 定时刷新房间和游戏状态
+  // 定时刷新房间和游戏状态（仅当配置的刷新间隔 > 0 时启用）
   useEffect(() => {
-    if (currentUser && roomId) {
+    if (currentUser && roomId && AUTO_REFRESH_INTERVAL > 0) {
       const interval = setInterval(() => {
         loadRoom();
         loadGameState();
-      }, 1000); // 从2秒改为1秒，更及时地检测房间变化
+      }, AUTO_REFRESH_INTERVAL);
       return () => clearInterval(interval);
     }
   }, [currentUser, roomId]);
@@ -143,6 +145,8 @@ function RoomContent() {
       }
     } catch (err) {
       console.error('加载房间失败:', err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -165,6 +169,12 @@ function RoomContent() {
     } catch (err) {
       console.error('加载游戏状态失败:', err);
     }
+  };
+
+  // 手动刷新
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadRoom(), loadGameState()]);
   };
 
   const handleStartGame = async () => {
@@ -356,14 +366,30 @@ function RoomContent() {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white truncate">{room.name}</h1>
               <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 truncate">
                 房间ID: {room.id} | 房主: {room.owner}
+                {AUTO_REFRESH_INTERVAL === 0 && (
+                  <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                    手动刷新模式
+                  </span>
+                )}
               </p>
             </div>
-            <button
-              onClick={handleLeaveRoom}
-              className="w-full sm:w-auto px-4 md:px-6 py-2 text-sm md:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
-            >
-              退出房间
-            </button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              {AUTO_REFRESH_INTERVAL === 0 && (
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={refreshing}
+                  className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-sm md:text-base bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {refreshing ? '🔄 刷新中...' : '🔄 刷新'}
+                </button>
+              )}
+              <button
+                onClick={handleLeaveRoom}
+                className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-sm md:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
+              >
+                退出房间
+              </button>
+            </div>
           </div>
         </div>
 
