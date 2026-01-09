@@ -20,6 +20,12 @@ export default function Home() {
       href: "/redis-test",
       icon: "🗄️",
     },
+    {
+      name: "SSR 示例",
+      description: "展示 Next.js 服务端渲染 (SSR) 特性",
+      href: "/ssr-demo",
+      icon: "🚀",
+    },
   ];
 
   return (
