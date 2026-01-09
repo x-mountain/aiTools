@@ -26,6 +26,12 @@ export default function Home() {
       href: "/ssr-demo",
       icon: "🚀",
     },
+    {
+      name: "24点游戏",
+      description: "多人在线24点游戏，支持排行榜和房间对战",
+      href: "/game24",
+      icon: "🎮",
+    },
   ];
 
   return (
@@ -60,6 +66,7 @@ export default function Home() {
 
         <div className="mt-16 text-center text-gray-500 dark:text-gray-400">
           <p>所有操作均在浏览器本地完成，数据不会上传到服务器</p>
+          <p className="text-sm mt-2">（24点游戏需要 Redis 支持，请确保已配置 REDIS_URL 环境变量）</p>
         </div>
       </main>
     </div>
