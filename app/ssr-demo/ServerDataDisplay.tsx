@@ -1,6 +1,9 @@
 // 服务端组件 - 默认就是 Server Component
 // 注意：没有 "use client" 指令
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 // 模拟数据库查询
 async function fetchDatabaseData() {
   // 模拟查询延迟
