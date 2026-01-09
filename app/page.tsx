@@ -14,6 +14,12 @@ export default function Home() {
       href: "/video-compressor",
       icon: "🎬",
     },
+    {
+      name: "Redis 测试",
+      description: "测试 Vercel KV (Redis) 数据存储功能",
+      href: "/redis-test",
+      icon: "🗄️",
+    },
   ];
 
   return (
