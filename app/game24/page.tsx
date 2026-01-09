@@ -179,12 +179,12 @@ export default function Game24Page() {
   // 注册界面
   if (showRegister) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">🎮 24点游戏</h1>
-            <p className="text-gray-600">使用4张牌算出24点，最快者获胜！</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">🎮 24点游戏</h1>
+          <p className="text-gray-600">使用4张牌算出24点，最快者获胜！</p>
+        </div>
 
           <div className="space-y-4">
             <div>
@@ -230,26 +230,26 @@ export default function Game24Page() {
   // 主界面
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 max-w-full overflow-x-hidden">
         {/* 顶部导航 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">🎮 24点游戏大厅</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white truncate">🎮 24点游戏大厅</h1>
+              <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 truncate">
                 当前玩家: <span className="font-semibold text-purple-600 dark:text-purple-400">{currentUser}</span>
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2 md:gap-3 flex-shrink-0">
               <Link 
                 href="/"
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors"
+                className="px-3 md:px-4 py-2 text-sm md:text-base text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors whitespace-nowrap"
               >
                 返回首页
               </Link>
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                className="px-3 md:px-4 py-2 text-sm md:text-base bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors whitespace-nowrap"
               >
                 退出登录
               </button>
@@ -257,19 +257,19 @@ export default function Game24Page() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
           {/* 房间列表 */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">🏠 游戏房间</h2>
+          <div className="lg:col-span-2 min-w-0">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">🏠 游戏房间</h2>
                 <button
                   onClick={() => {
                     setShowCreateRoom(true);
                     setRoomName('');
                     setError('');
                   }}
-                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all"
+                  className="px-4 md:px-6 py-2 text-sm md:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all whitespace-nowrap"
                 >
                   + 创建房间
                 </button>
@@ -283,30 +283,32 @@ export default function Game24Page() {
 
               {showCreateRoom && (
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
-                  <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-3">创建新房间</h3>
-                  <div className="flex gap-3">
+                  <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-3 text-sm md:text-base">创建新房间</h3>
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <input
                       type="text"
                       value={roomName}
                       onChange={(e) => setRoomName(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
                       placeholder="输入房间名称"
-                      className="flex-1 px-4 py-2 border border-purple-300 dark:border-purple-700 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                      className="flex-1 px-4 py-2 text-sm md:text-base border border-purple-300 dark:border-purple-700 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-white min-w-0"
                       disabled={loading}
                     />
-                    <button
-                      onClick={handleCreateRoom}
-                      disabled={loading}
-                      className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                    >
-                      {loading ? '创建中...' : '创建'}
-                    </button>
-                    <button
-                      onClick={() => setShowCreateRoom(false)}
-                      className="px-6 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
-                    >
-                      取消
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleCreateRoom}
+                        disabled={loading}
+                        className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-sm md:text-base bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {loading ? '创建中...' : '创建'}
+                      </button>
+                      <button
+                        onClick={() => setShowCreateRoom(false)}
+                        className="flex-1 sm:flex-none px-4 md:px-6 py-2 text-sm md:text-base bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors whitespace-nowrap"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -323,15 +325,15 @@ export default function Game24Page() {
                       key={room.id}
                       className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 hover:shadow-md transition-shadow"
                     >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base md:text-lg font-semibold text-gray-800 dark:text-white truncate">
                             {room.name}
                           </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                          <p className="text-xs md:text-sm text-gray-600 dark:text-gray-300 mt-1">
                             房主: {room.owner} | 人数: {room.playerCount}/4
                           </p>
-                          <div className="flex gap-2 mt-2">
+                          <div className="flex gap-2 mt-2 flex-wrap">
                             {room.players.map((player) => (
                               <span
                                 key={player}
@@ -345,7 +347,7 @@ export default function Game24Page() {
                         <button
                           onClick={() => handleJoinRoom(room.id)}
                           disabled={loading || room.playerCount >= 4}
-                          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full sm:w-auto px-4 md:px-6 py-2 text-sm md:text-base bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                         >
                           {room.playerCount >= 4 ? '已满' : '加入'}
                         </button>

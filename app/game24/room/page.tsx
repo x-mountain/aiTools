@@ -16,6 +16,7 @@ interface GameState {
   status: string;
   cards: number[] | null;
   winner: string | null;
+  foldedPlayers: string[];
 }
 
 function RoomContent() {
@@ -24,7 +25,7 @@ function RoomContent() {
   
   const [currentUser, setCurrentUser] = useState<string>('');
   const [room, setRoom] = useState<RoomData | null>(null);
-  const [gameState, setGameState] = useState<GameState>({ status: 'waiting', cards: null, winner: null });
+  const [gameState, setGameState] = useState<GameState>({ status: 'waiting', cards: null, winner: null, foldedPlayers: [] });
   const [expression, setExpression] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -80,7 +81,8 @@ function RoomContent() {
         setGameState({
           status: data.status,
           cards: data.cards,
-          winner: data.winner
+          winner: data.winner,
+          foldedPlayers: data.foldedPlayers || []
         });
       }
     } catch (err) {
@@ -111,6 +113,45 @@ function RoomContent() {
         loadGameState();
       } else {
         setError(data.error || '开始游戏失败');
+      }
+    } catch (err) {
+      setError('网络错误: ' + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFold = async () => {
+    if (!confirm('确定要弃牌吗？')) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const res = await fetch('/api/game24/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          roomId, 
+          action: 'fold',
+          username: currentUser
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        if (data.isDraw) {
+          setMessage('🤝 ' + data.message);
+        } else {
+          setMessage(data.message);
+        }
+        loadGameState();
+      } else {
+        setError(data.error || '弃牌失败');
       }
     } catch (err) {
       setError('网络错误: ' + (err as Error).message);
@@ -191,32 +232,33 @@ function RoomContent() {
   const canStart = isOwner && room.players.length >= 2 && gameState.status === 'waiting';
   const isPlaying = gameState.status === 'playing';
   const isFinished = gameState.status === 'finished';
+  const hasFolded = gameState.foldedPlayers.includes(currentUser);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 max-w-full overflow-x-hidden">
         {/* 顶部导航 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{room.name}</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white truncate">{room.name}</h1>
+              <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1 truncate">
                 房间ID: {room.id} | 房主: {room.owner}
               </p>
             </div>
             <button
               onClick={handleLeaveRoom}
-              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="w-full sm:w-auto px-4 md:px-6 py-2 text-sm md:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
             >
               退出房间
             </button>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
           {/* 游戏区域 */}
-          <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="lg:col-span-2 min-w-0">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6">
               {/* 状态信息 */}
               <div className="mb-6">
                 {gameState.status === 'waiting' && (
@@ -242,9 +284,15 @@ function RoomContent() {
 
                 {isFinished && gameState.winner && (
                   <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-4 text-center">
-                    <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg">
-                      🏆 游戏结束！获胜者: {gameState.winner}
-                    </p>
+                    {gameState.winner === 'draw' ? (
+                      <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg">
+                        🤝 游戏结束！双方均弃牌，和局！
+                      </p>
+                    ) : (
+                      <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg">
+                        🏆 游戏结束！获胜者: {gameState.winner}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -252,23 +300,23 @@ function RoomContent() {
               {/* 卡牌显示 */}
               {gameState.cards && (
                 <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">
+                  <h3 className="text-base md:text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">
                     🎴 当前卡牌
                   </h3>
-                  <div className="flex justify-center gap-4">
+                  <div className="flex justify-center gap-2 md:gap-4 flex-wrap">
                     {gameState.cards.map((card, index) => (
                       <div
                         key={index}
-                        className="w-20 h-28 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
+                        className="w-16 h-24 md:w-20 md:h-28 bg-gradient-to-br from-red-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center cursor-pointer hover:scale-110 transition-transform"
                         onClick={() => !isFinished && insertNumber(card)}
                       >
-                        <span className="text-4xl font-bold text-white">
+                        <span className="text-3xl md:text-4xl font-bold text-white">
                           {card === 1 ? 'A' : card === 11 ? 'J' : card === 12 ? 'Q' : card === 13 ? 'K' : card}
                         </span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-3">
+                  <p className="text-center text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-3">
                     点击卡牌快速输入数字
                   </p>
                 </div>
@@ -301,53 +349,72 @@ function RoomContent() {
               {/* 答题区域 */}
               {isPlaying && (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      输入你的表达式（例如: (1+2+3)*4）
-                    </label>
-                    <input
-                      type="text"
-                      value={expression}
-                      onChange={(e) => setExpression(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-                      placeholder="在此输入算式"
-                      className="w-full px-4 py-3 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-white font-mono"
-                      disabled={loading}
-                    />
-                  </div>
+                  {hasFolded ? (
+                    <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-6 text-center">
+                      <p className="text-gray-600 dark:text-gray-400 text-lg">
+                        🚩 您已弃牌，等待其他玩家作答...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          输入你的表达式（例如: (1+2+3)*4）
+                        </label>
+                        <input
+                          type="text"
+                          value={expression}
+                          onChange={(e) => setExpression(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
+                          placeholder="在此输入算式"
+                          className="w-full px-3 md:px-4 py-2 md:py-3 text-base md:text-lg border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-white font-mono"
+                          disabled={loading}
+                        />
+                      </div>
 
-                  {/* 快捷操作按钮 */}
-                  <div className="grid grid-cols-8 gap-2">
-                    <button onClick={() => insertOperator('(')} className="col-span-1 py-3 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 font-bold">
-                      (
-                    </button>
-                    <button onClick={() => insertOperator(')')} className="col-span-1 py-3 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 font-bold">
-                      )
-                    </button>
-                    <button onClick={() => insertOperator('+')} className="col-span-1 py-3 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
-                      +
-                    </button>
-                    <button onClick={() => insertOperator('-')} className="col-span-1 py-3 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
-                      -
-                    </button>
-                    <button onClick={() => insertOperator('*')} className="col-span-1 py-3 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
-                      ×
-                    </button>
-                    <button onClick={() => insertOperator('/')} className="col-span-1 py-3 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
-                      ÷
-                    </button>
-                    <button onClick={() => setExpression('')} className="col-span-2 py-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 font-bold">
-                      清空
-                    </button>
-                  </div>
+                      {/* 快捷操作按钮 */}
+                      <div className="grid grid-cols-8 gap-1 md:gap-2">
+                        <button onClick={() => insertOperator('(')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 font-bold">
+                          (
+                        </button>
+                        <button onClick={() => insertOperator(')')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 font-bold">
+                          )
+                        </button>
+                        <button onClick={() => insertOperator('+')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
+                          +
+                        </button>
+                        <button onClick={() => insertOperator('-')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
+                          -
+                        </button>
+                        <button onClick={() => insertOperator('*')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
+                          ×
+                        </button>
+                        <button onClick={() => insertOperator('/')} className="col-span-1 py-2 md:py-3 text-sm md:text-base bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-800 font-bold">
+                          ÷
+                        </button>
+                        <button onClick={() => setExpression('')} className="col-span-2 py-2 md:py-3 text-sm md:text-base bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 font-bold">
+                          清空
+                        </button>
+                      </div>
 
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? '提交中...' : '✅ 提交答案'}
-                  </button>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={handleFold}
+                          disabled={loading}
+                          className="w-full py-3 md:py-4 text-base md:text-lg bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading ? '处理中...' : '🚩 弃牌'}
+                        </button>
+                        <button
+                          onClick={handleSubmit}
+                          disabled={loading}
+                          className="w-full py-3 md:py-4 text-base md:text-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading ? '提交中...' : '✅ 提交答案'}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -388,9 +455,14 @@ function RoomContent() {
                           房主
                         </span>
                       )}
-                      {player === gameState.winner && (
+                      {player === gameState.winner && gameState.winner !== 'draw' && (
                         <span className="ml-2 text-xs bg-green-400 text-green-900 px-2 py-1 rounded">
                           🏆
+                        </span>
+                      )}
+                      {gameState.foldedPlayers.includes(player) && (
+                        <span className="ml-2 text-xs bg-gray-400 text-gray-900 px-2 py-1 rounded">
+                          🚩 弃牌
                         </span>
                       )}
                     </p>

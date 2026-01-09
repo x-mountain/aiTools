@@ -105,13 +105,61 @@ export async function POST(request: NextRequest) {
       // 保存卡牌
       await client.set(`${roomKey}:cards`, JSON.stringify(cards));
       
-      // 清空上一轮的提交记录
+      // 清空上一轮的提交记录和弃牌记录
       await client.del(`${roomKey}:submissions`);
+      await client.del(`${roomKey}:folds`);
 
       return NextResponse.json({ 
         success: true, 
         cards,
         message: '游戏开始！'
+      });
+    }
+
+    // 弃牌
+    if (action === 'fold') {
+      // 检查游戏状态
+      const status = await client.hGet(roomKey, 'status');
+      if (status !== 'playing') {
+        return NextResponse.json({ error: '游戏未开始' }, { status: 400 });
+      }
+
+      // 检查是否已弃牌
+      const alreadyFolded = await client.sIsMember(`${roomKey}:folds`, username);
+      if (alreadyFolded) {
+        return NextResponse.json({ error: '您已经弃牌' }, { status: 400 });
+      }
+
+      // 记录弃牌
+      await client.sAdd(`${roomKey}:folds`, username);
+      
+      // 获取所有玩家和弃牌玩家
+      const players = await client.sMembers(`${roomKey}:players`);
+      const foldedPlayers = await client.sMembers(`${roomKey}:folds`);
+      
+      // 判断是否所有人都弃牌（和局）
+      if (foldedPlayers.length === players.length) {
+        // 所有人弃牌，和局
+        await client.hSet(roomKey, 'status', 'finished');
+        await client.hSet(roomKey, 'winner', 'draw');
+        
+        // 更新所有玩家的游戏局数
+        for (const player of players) {
+          await client.hIncrBy(`user:${player}`, 'games', 1);
+        }
+        
+        return NextResponse.json({ 
+          success: true, 
+          message: '双方都选择弃牌，和局！',
+          isDraw: true
+        });
+      }
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: '弃牌成功，对方可以继续作答',
+        foldedCount: foldedPlayers.length,
+        totalPlayers: players.length
       });
     }
 
@@ -125,6 +173,12 @@ export async function POST(request: NextRequest) {
       const status = await client.hGet(roomKey, 'status');
       if (status !== 'playing') {
         return NextResponse.json({ error: '游戏未开始' }, { status: 400 });
+      }
+
+      // 检查是否已弃牌
+      const hasFolded = await client.sIsMember(`${roomKey}:folds`, username);
+      if (hasFolded) {
+        return NextResponse.json({ error: '您已弃牌，不能再提交答案' }, { status: 400 });
       }
 
       // 检查是否已提交
@@ -166,6 +220,15 @@ export async function POST(request: NextRequest) {
       await client.hIncrBy(`user:${username}`, 'score', 1);
       await client.hIncrBy(`user:${username}`, 'wins', 1);
       await client.hIncrBy(`user:${username}`, 'games', 1);
+      
+      // 更新其他玩家的游戏局数（未弃牌的玩家）
+      const players = await client.sMembers(`${roomKey}:players`);
+      const foldedPlayers = await client.sMembers(`${roomKey}:folds`);
+      for (const player of players) {
+        if (player !== username && !foldedPlayers.includes(player)) {
+          await client.hIncrBy(`user:${player}`, 'games', 1);
+        }
+      }
 
       // 更新房间状态为完成
       await client.hSet(roomKey, 'status', 'finished');
@@ -206,13 +269,15 @@ export async function GET(request: NextRequest) {
     const roomData = await client.hGetAll(roomKey);
     const cardsStr = await client.get(`${roomKey}:cards`);
     const cards = cardsStr ? JSON.parse(cardsStr) : null;
+    const foldedPlayers = await client.sMembers(`${roomKey}:folds`);
 
     return NextResponse.json({ 
       success: true, 
       status: roomData.status,
       cards,
       winner: roomData.winner || null,
-      currentRound: parseInt(roomData.currentRound || '0')
+      currentRound: parseInt(roomData.currentRound || '0'),
+      foldedPlayers
     });
   } catch (error) {
     console.error('获取游戏状态错误:', error);

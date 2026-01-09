@@ -24,15 +24,25 @@ export async function POST(request: NextRequest) {
     }
 
     const client = await getRedisClient();
+    const userId = `user:${username}`;
     
     // 检查用户是否已存在
-    const exists = await client.exists(`user:${username}`);
+    const exists = await client.exists(userId);
     if (exists) {
-      return NextResponse.json({ error: '用户名已存在' }, { status: 400 });
+      // 用户已存在，直接返回登录成功
+      const userData = await client.hGetAll(userId);
+      return NextResponse.json({ 
+        success: true, 
+        user: { 
+          username: userData.username,
+          score: parseInt(userData.score || '0'),
+          wins: parseInt(userData.wins || '0'),
+          games: parseInt(userData.games || '0')
+        }
+      });
     }
 
-    // 创建用户
-    const userId = `user:${username}`;
+    // 创建新用户
     await client.hSet(userId, {
       username,
       score: '0',
