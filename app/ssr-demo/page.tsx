@@ -22,10 +22,6 @@ async function fetchServerData() {
   };
 }
 
-// 强制动态渲染 - 禁用静态生成
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 // 服务端组件 - 默认就是 SSR
 export default async function SSRDemo() {
   // 这段代码在服务端执行
