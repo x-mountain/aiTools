@@ -17,6 +17,11 @@ interface GameState {
   cards: number[] | null;
   winner: string | null;
   foldedPlayers: string[];
+  solutionData?: {
+    hasAnswer: boolean;
+    solutions: string[];
+    cards: number[];
+  } | null;
 }
 
 function RoomContent() {
@@ -25,7 +30,13 @@ function RoomContent() {
   
   const [currentUser, setCurrentUser] = useState<string>('');
   const [room, setRoom] = useState<RoomData | null>(null);
-  const [gameState, setGameState] = useState<GameState>({ status: 'waiting', cards: null, winner: null, foldedPlayers: [] });
+  const [gameState, setGameState] = useState<GameState>({ 
+    status: 'waiting', 
+    cards: null, 
+    winner: null, 
+    foldedPlayers: [],
+    solutionData: null
+  });
   const [expression, setExpression] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,6 +51,32 @@ function RoomContent() {
     setCurrentUser(user);
     loadRoom();
     loadGameState();
+    
+    // 添加页面关闭/刷新监听，确保房主关闭页面时房间被销毁
+    const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+      // 使用 sendBeacon 确保请求能发出
+      const url = `/api/game24/rooms/join?roomId=${roomId}&username=${user}`;
+      
+      // 尝试使用 sendBeacon，如果不支持则使用同步请求
+      if (navigator.sendBeacon) {
+        // sendBeacon 只能发送 POST 请求，所以我们需要创建一个特殊的端点
+        const blob = new Blob([JSON.stringify({ roomId, username: user })], {
+          type: 'application/json'
+        });
+        navigator.sendBeacon(url, blob);
+      } else {
+        // 备用方案：使用同步 XMLHttpRequest
+        const xhr = new XMLHttpRequest();
+        xhr.open('DELETE', url, false); // false = 同步请求
+        xhr.send();
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [roomId]);
 
   // 定时刷新房间和游戏状态
@@ -48,10 +85,39 @@ function RoomContent() {
       const interval = setInterval(() => {
         loadRoom();
         loadGameState();
-      }, 2000);
+      }, 1000); // 从2秒改为1秒，更及时地检测房间变化
       return () => clearInterval(interval);
     }
   }, [currentUser, roomId]);
+
+  // 心跳机制：每20秒向服务器发送心跳
+  useEffect(() => {
+    if (currentUser && roomId) {
+      // 立即发送一次心跳
+      sendHeartbeat();
+      
+      // 每20秒发送一次心跳
+      const heartbeatInterval = setInterval(() => {
+        sendHeartbeat();
+      }, 20000);
+      
+      return () => clearInterval(heartbeatInterval);
+    }
+  }, [currentUser, roomId]);
+
+  const sendHeartbeat = async () => {
+    if (!currentUser || !roomId) return;
+    
+    try {
+      await fetch('/api/game24/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, username: currentUser })
+      });
+    } catch (err) {
+      console.error('发送心跳失败:', err);
+    }
+  };
 
   const loadRoom = async () => {
     if (!roomId) return;
@@ -62,6 +128,16 @@ function RoomContent() {
       
       if (data.success) {
         setRoom(data.room);
+        
+        // 检查当前用户是否还在房间中
+        if (currentUser && data.room.players && !data.room.players.includes(currentUser)) {
+          // 当前用户不在房间中，静默跳转回大厅（不弹窗）
+          window.location.href = `/game24?t=${Date.now()}`;
+          return;
+        }
+      } else if (res.status === 404 || data.error === '房间不存在') {
+        // 房间已被销毁，静默跳转回大厅（不弹窗）
+        window.location.href = `/game24?t=${Date.now()}`;
       } else {
         setError('房间不存在');
       }
@@ -82,7 +158,8 @@ function RoomContent() {
           status: data.status,
           cards: data.cards,
           winner: data.winner,
-          foldedPlayers: data.foldedPlayers || []
+          foldedPlayers: data.foldedPlayers || [],
+          solutionData: data.solutionData || null
         });
       }
     } catch (err) {
@@ -146,6 +223,17 @@ function RoomContent() {
       if (data.success) {
         if (data.isDraw) {
           setMessage('🤝 ' + data.message);
+          // 更新游戏状态以显社答案
+          if (data.hasAnswer || data.noSolution) {
+            setGameState(prev => ({
+              ...prev,
+              solutionData: {
+                hasAnswer: data.hasAnswer,
+                solutions: data.solutions || [],
+                cards: gameState.cards || []
+              }
+            }));
+          }
         } else {
           setMessage(data.message);
         }
@@ -200,12 +288,28 @@ function RoomContent() {
 
   const handleLeaveRoom = async () => {
     try {
-      await fetch(`/api/game24/rooms/join?roomId=${roomId}&username=${currentUser}`, {
+      const res = await fetch(`/api/game24/rooms/join?roomId=${roomId}&username=${currentUser}`, {
         method: 'DELETE'
       });
-      window.location.href = '/game24';
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // 立即刷新房间信息，让其他玩家可以看到更新
+        if (!data.roomDestroyed) {
+          // 如果房间没有销毁，刷新房间信息
+          await loadRoom();
+        }
+      }
+      
+      // 添加时间戳参数，确保浏览器不使用缓存，并给后端一点时间更新
+      setTimeout(() => {
+        window.location.href = `/game24?t=${Date.now()}`;
+      }, 500); // 等待500ms让后端完成更新（从300ms增加到500ms）
     } catch (err) {
       console.error('退出房间失败:', err);
+      // 即使出错也跳转回大厅
+      window.location.href = `/game24?t=${Date.now()}`;
     }
   };
 
@@ -215,6 +319,14 @@ function RoomContent() {
 
   const insertOperator = (op: string) => {
     setExpression(expression + op);
+  };
+
+  // 简化表达式显示
+  const simplifyDisplayExpression = (expr: string): string => {
+    return expr
+      .replace(/\*/g, '×')
+      .replace(/\//g, '÷')
+      .replace(/\(([\d.]+)\)/g, '$1'); // 移除单个数字的括号
   };
 
   if (!room) {
@@ -285,9 +397,43 @@ function RoomContent() {
                 {isFinished && gameState.winner && (
                   <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-300 dark:border-purple-700 rounded-lg p-4 text-center">
                     {gameState.winner === 'draw' ? (
-                      <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg">
-                        🤝 游戏结束！双方均弃牌，和局！
-                      </p>
+                      <div>
+                        <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg mb-3">
+                          🤝 游戏结束！双方均弃牌，和局！
+                        </p>
+                        {gameState.solutionData && (
+                          <div className="mt-4 p-4 bg-white dark:bg-gray-700 rounded-lg">
+                            {gameState.solutionData.hasAnswer ? (
+                              <div>
+                                <p className="text-green-700 dark:text-green-400 font-semibold mb-2">
+                                  ✅ 正确答案：
+                                </p>
+                                <div className="space-y-2">
+                                  {gameState.solutionData.solutions.slice(0, 3).map((solution, idx) => (
+                                    <div key={idx} className="text-sm md:text-base text-gray-800 dark:text-gray-200 font-mono bg-gray-100 dark:bg-gray-600 p-2 rounded">
+                                      {simplifyDisplayExpression(solution)}
+                                    </div>
+                                  ))}
+                                </div>
+                                {gameState.solutionData.solutions.length > 3 && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    还有 {gameState.solutionData.solutions.length - 3} 个解...
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-red-700 dark:text-red-400 font-semibold">
+                                  ❌ 当前牌面无解
+                                </p>
+                                {/* <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                                  这组数字无法通过加减乘除运算得到24点
+                                </p> */}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <p className="text-purple-800 dark:text-purple-300 font-semibold text-lg">
                         🏆 游戏结束！获胜者: {gameState.winner}

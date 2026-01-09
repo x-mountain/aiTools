@@ -23,6 +23,79 @@ function generateCards(): number[] {
   return cards;
 }
 
+// 24点求解算法
+function solve24(cards: number[]): string[] {
+  const solutions: Set<string> = new Set();
+  const target = 24;
+  const eps = 0.0001;
+
+  // 生成所有排列
+  function permute(arr: number[]): number[][] {
+    if (arr.length <= 1) return [arr];
+    const result: number[][] = [];
+    for (let i = 0; i < arr.length; i++) {
+      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+      const perms = permute(rest);
+      for (const perm of perms) {
+        result.push([arr[i], ...perm]);
+      }
+    }
+    return result;
+  }
+
+  // 递归计算所有可能的表达式
+  function calculate(nums: number[], exprs: string[]): void {
+    if (nums.length === 1) {
+      if (Math.abs(nums[0] - target) < eps) {
+        solutions.add(exprs[0]);
+      }
+      return;
+    }
+
+    for (let i = 0; i < nums.length; i++) {
+      for (let j = 0; j < nums.length; j++) {
+        if (i === j) continue;
+
+        const a = nums[i];
+        const b = nums[j];
+        const exprA = exprs[i];
+        const exprB = exprs[j];
+
+        const remaining = nums.filter((_, idx) => idx !== i && idx !== j);
+        const remainingExprs = exprs.filter((_, idx) => idx !== i && idx !== j);
+
+        // 加法
+        calculate([...remaining, a + b], [...remainingExprs, `(${exprA}+${exprB})`]);
+
+        // 减法
+        calculate([...remaining, a - b], [...remainingExprs, `(${exprA}-${exprB})`]);
+
+        // 乘法
+        calculate([...remaining, a * b], [...remainingExprs, `(${exprA}*${exprB})`]);
+
+        // 除法
+        if (Math.abs(b) > eps) {
+          calculate([...remaining, a / b], [...remainingExprs, `(${exprA}/${exprB})`]);
+        }
+      }
+    }
+  }
+
+  // 尝试所有排列
+  const perms = permute(cards);
+  for (const perm of perms) {
+    calculate(perm, perm.map(String));
+  }
+
+  return Array.from(solutions).slice(0, 5); // 返回前5个解
+}
+
+// 简化表达式显示（移除不必要的括号）
+function simplifyExpression(expr: string): string {
+  // 这里可以添加更复杂的简化逻辑
+  return expr.replace(/\(([\d.]+)\)/g, '$1');
+}
+
 // 验证算式是否正确（简化版：只验证结果是否为24）
 function validateExpression(expression: string, cards: number[]): { valid: boolean; result?: number; error?: string } {
   try {
@@ -140,6 +213,24 @@ export async function POST(request: NextRequest) {
       // 判断是否所有人都弃牌（和局）
       if (foldedPlayers.length === players.length) {
         // 所有人弃牌，和局
+        // 获取当前卡牌并求解
+        const cardsStr = await client.get(`${roomKey}:cards`);
+        let solutions: string[] = [];
+        let hasAnswer = false;
+        
+        if (cardsStr) {
+          const cards = JSON.parse(cardsStr);
+          solutions = solve24(cards);
+          hasAnswer = solutions.length > 0;
+          
+          // 保存答案到Redis
+          await client.set(`${roomKey}:solutions`, JSON.stringify({
+            hasAnswer,
+            solutions: hasAnswer ? solutions : [],
+            cards
+          }));
+        }
+        
         await client.hSet(roomKey, 'status', 'finished');
         await client.hSet(roomKey, 'winner', 'draw');
         
@@ -151,7 +242,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ 
           success: true, 
           message: '双方都选择弃牌，和局！',
-          isDraw: true
+          isDraw: true,
+          hasAnswer,
+          solutions: hasAnswer ? solutions : [],
+          noSolution: !hasAnswer
         });
       }
       
@@ -270,6 +364,15 @@ export async function GET(request: NextRequest) {
     const cardsStr = await client.get(`${roomKey}:cards`);
     const cards = cardsStr ? JSON.parse(cardsStr) : null;
     const foldedPlayers = await client.sMembers(`${roomKey}:folds`);
+    
+    // 获取答案信息（如果是和局）
+    let solutionData = null;
+    if (roomData.status === 'finished' && roomData.winner === 'draw') {
+      const solutionsStr = await client.get(`${roomKey}:solutions`);
+      if (solutionsStr) {
+        solutionData = JSON.parse(solutionsStr);
+      }
+    }
 
     return NextResponse.json({ 
       success: true, 
@@ -277,7 +380,8 @@ export async function GET(request: NextRequest) {
       cards,
       winner: roomData.winner || null,
       currentRound: parseInt(roomData.currentRound || '0'),
-      foldedPlayers
+      foldedPlayers,
+      solutionData
     });
   } catch (error) {
     console.error('获取游戏状态错误:', error);

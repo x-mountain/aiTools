@@ -37,6 +37,7 @@ export default function Game24Page() {
     const user = localStorage.getItem('game24_user');
     if (user) {
       setCurrentUser(user);
+      // 强制刷新房间列表，不使用缓存
       loadRooms();
       loadLeaderboard();
     } else {
@@ -47,16 +48,18 @@ export default function Game24Page() {
   // 定时刷新房间列表
   useEffect(() => {
     if (currentUser && !showCreateRoom) {
-      const interval = setInterval(loadRooms, 3000);
+      const interval = setInterval(loadRooms, 2000); // 从3秒改为2秒，更及时地更新房间列表
       return () => clearInterval(interval);
     }
   }, [currentUser, showCreateRoom]);
 
   const loadRooms = async () => {
     try {
-      const res = await fetch('/api/game24/rooms');
+      // 添加时间戳参数防止缓存
+      const res = await fetch(`/api/game24/rooms?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
+        console.log('[大厅] 加载房间列表:', data.rooms);
         setRooms(data.rooms || []);
       }
     } catch (err) {
